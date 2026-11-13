@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Shell static analysis
-        run: shellcheck --shell=sh scripts/*.sh tests/*.sh
+        run: shellcheck scripts/*.sh tests/*.sh
       - name: Build exact runtime image
         run: docker build -t cert-relay:test .
       - name: Script behavior tests in Alpine
@@ -30,8 +30,14 @@ jobs:
           cert-relay:test /tests/sync.sh /usr/local/bin/cert-sync
       - name: Actual Traefik compatibility, reload and shutdown tests
         run: python3 tests/container.py cert-relay:test
+      - name: General folder synchronization and live configuration reload
+        run: |
+          docker run --rm --entrypoint /bin/bash -v "$PWD:/project:ro" cert-relay:test /project/tests/folders.sh
+          docker run --rm --entrypoint /bin/sh -v "$PWD:/project:ro" cert-relay:test -c 'apk add --no-cache curl >/dev/null && bash /project/tests/folder-reload.sh'
       - name: Validate Swarm example
-        run: docker stack config -c examples/stack.yml > /dev/null
+        run: |
+          docker stack config -c examples/stack.yml > /dev/null
+          docker stack config -c examples/folders-stack.yml > /dev/null
 
   publish:
     needs: test
@@ -57,12 +63,9 @@ jobs:
         id: meta
         with:
           images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=sha
+            type=raw,value=${{ github.run_id }}
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -72,3 +75,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Published image name
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}:${{ github.run_id }}
+        run: echo "Image build ID tag = $IMAGE" >> "$GITHUB_STEP_SUMMARY"

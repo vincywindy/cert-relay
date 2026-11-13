@@ -1,6 +1,29 @@
 # CertRelay
 
-CertRelay（证书接力）：为 Traefik 提供轻量的证书分发与热加载。
+CertRelay（证书接力）：为 Traefik 提供轻量的证书、动态配置及通用目录分发与热加载。
+
+项目目录为 `E:\work\code\cert-relay`，GitHub 仓库为 `vincywindy/cert-relay`。
+
+## 多组源目录 → 目标目录
+
+除了下文保留的证书校验/版本化模式，现在也支持任意文件的多目录对单向同步：
+
+```yaml
+environment:
+  SYNC_MODE: folders
+  SYNC_PAIRS: |
+    /source/certs|/local/certs
+    /source/dynamic|/local/dynamic
+  SYNC_INTERVAL_SECS: "60"
+  SYNC_MIN_AGE_SECS: "10"
+  SYNC_RELOAD_FILE: /local/dynamic/tls.yml
+```
+
+目录模式使用 `cmp` 比较内容，跳过近期修改的源/目标文件，临时文件刷新后原子替换；证书变化后可触发指定现有动态配置的重载。它不解析业务文件，也不删除目标额外文件，保证单文件原子性，不保证跨文件事务。
+
+完整说明见 [`FOLDER_SYNC.md`](FOLDER_SYNC.md)，Swarm 示例见 [`examples/folders-stack.yml`](examples/folders-stack.yml)。本来的 JSON `{name, cert, key}` 模式、证书配对校验和版本化发布继续保留。`SYNC_MODE` 默认为 `auto`：JSON 数组选择 `certificates`，`源|目标` 行格式选择 `folders`；也可显式指定。一个实例选择一种模式，目录模式本身就可以同时分发证书和配置。
+
+下面的证书专用配置说明对应 `SYNC_MODE=certificates`。
 
 基于 **`traefik:3.7.18`**，使用 shell 定时把统一 ACME 客户端签发的 PEM 证书从 NFS 复制到各节点本地，通过更新 Traefik File Provider 动态配置热加载。支持多组证书，不包含 ACME 签发功能。
 
@@ -126,7 +149,7 @@ docker network create --driver overlay --attachable proxy
 docker node update --label-add traefik=true YOUR_MANAGER_NODE
 
 # 使用实际 GitHub 仓库对应的镜像路径；私有 GHCR 镜像先 docker login ghcr.io。
-export TRAEFIK_SYNC_IMAGE=ghcr.io/your-org/your-repo:latest
+export TRAEFIK_SYNC_IMAGE=ghcr.io/vincywindy/cert-relay:12345678901
 docker stack deploy --with-registry-auth -c examples/stack.yml edge
 docker service logs -f edge_traefik
 ```
@@ -151,7 +174,7 @@ docker run --rm cert-relay:3.7.18 version
 - PR、`main`/`master` 推送、`v*` 标签及手动运行触发。
 - ShellCheck、在实际 Alpine 镜像中执行行为测试、启动真实 Traefik 验证 CLI/环境变量/静态配置文件兼容、TLS 证书热加载、信号退出和同步进程故障退出。
 - 检查通过后构建 `linux/amd64`、`linux/arm64`，非 PR 推送到 `ghcr.io/<仓库所有者>/<仓库名>`，使用自动提供的 `GITHUB_TOKEN`，不需要自建仓库密码 secret。
-- 默认分支生成 `latest`，标签如 `v1.0.0` 生成 `1.0.0`，同时带分支/提交标签。PR 只构建，不推送。
+- 镜像仅使用 GitHub build/run ID：`ghcr.io/vincywindy/cert-relay:${{ github.run_id }}`。不再发布 `latest`、分支或 semver 标签；同一 run 重试沿用同一个 ID。PR 只构建，不推送。
 
 仓库需要允许 workflow 写入 Packages。新建的 GHCR 包可能是私有的，Swarm 节点需登录或自行将包改为公开。项目只提供工作流，不会自动创建 GitHub 仓库或执行发布。
 
@@ -160,7 +183,7 @@ docker run --rm cert-relay:3.7.18 version
 Linux/Docker 上执行完整测试：
 
 ```sh
-shellcheck --shell=sh scripts/*.sh tests/*.sh
+shellcheck scripts/*.sh tests/*.sh
 docker build -t cert-relay:test .
 docker run --rm --entrypoint /bin/sh -v "$PWD/tests:/tests:ro" \
   cert-relay:test /tests/sync.sh /usr/local/bin/cert-sync

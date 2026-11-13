@@ -8,6 +8,11 @@ case "${SYNC_ENABLED:-true}" in
     *) echo 'cert-sync: SYNC_ENABLED must be true/false or 1/0' >&2; exit 64 ;;
 esac
 
+# Explicit one-shot/standalone folder commands do not start the reverse proxy.
+case "$1" in
+    sync-only|sync-once|sync-check) exec /usr/local/bin/folder-sync-entrypoint "$@" ;;
+esac
+
 # Diagnostics and arbitrary commands retain the official image behavior without requiring certificates.
 case "$1" in
     --help|-h|--version) exec /entrypoint.sh "$@" ;;
@@ -19,6 +24,22 @@ case "$1" in
             *) exec /entrypoint.sh "$@" ;;
         esac ;;
     *) exec /entrypoint.sh "$@" ;;
+esac
+
+# Preserve the existing JSON certificate contract, including source paths containing '|'.
+# The new line-delimited folder format selects the general synchronizer without changing Traefik arguments.
+mode=${SYNC_MODE:-auto}
+if [ "$mode" = auto ]; then
+    if printf '%s' "${SYNC_PAIRS:-}" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        mode=certificates
+    else
+        mode=folders
+    fi
+fi
+case "$mode" in
+    folders) exec /usr/local/bin/folder-sync-entrypoint "$@" ;;
+    certificates) ;;
+    *) echo 'cert-sync: SYNC_MODE must be auto, folders or certificates' >&2; exit 64 ;;
 esac
 
 traefik_pid=

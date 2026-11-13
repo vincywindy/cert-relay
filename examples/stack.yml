@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   traefik:
-    image: ${TRAEFIK_SYNC_IMAGE:-ghcr.io/your-org/cert-relay:latest}
+    image: ${TRAEFIK_SYNC_IMAGE:-ghcr.io/vincywindy/cert-relay:12345678901}
     # Keep your existing command entries. Only add the file provider if it is not already configured.
     command:
       - --entrypoints.web.address=:80
