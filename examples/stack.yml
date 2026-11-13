@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: ${TRAEFIK_SYNC_IMAGE:-ghcr.io/your-org/cert-relay:latest}
+    # Keep your existing command entries. Only add the file provider if it is not already configured.
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.swarm.endpoint=unix:///var/run/docker.sock
+      - --providers.swarm.exposedbydefault=false
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --ping=true
+      - --log.level=INFO
+    environment:
+      SYNC_PAIRS: >-
+        [{"name":"example-com","cert":"/nfs-certs/example.com/fullchain.pem","key":"/nfs-certs/example.com/privkey.pem"},
+         {"name":"example-net","cert":"/nfs-certs/example.net/fullchain.pem","key":"/nfs-certs/example.net/privkey.pem"}]
+      SYNC_INTERVAL_SECS: "300"
+      SYNC_MIN_AGE_SECS: "10"
+      SYNC_IO_TIMEOUT_SECS: "30"
+      SYNC_STATE_DIR: /var/lib/traefik-cert-sync
+      SYNC_DYNAMIC_FILE: /etc/traefik/dynamic/cert-sync.yml
+      # Existing application / TRAEFIK_* variables are forwarded unchanged.
+    ports:
+      # Host-mode publishing bypasses the Swarm ingress routing mesh.
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
+    volumes:
+      # /mnt/acme-certs must already be mounted from NFS on every eligible node.
+      - type: bind
+        source: /mnt/acme-certs
+        target: /nfs-certs
+        read_only: true
+      # These two directories MUST be local to each node, and must exist before stack deploy.
+      - type: bind
+        source: /var/lib/traefik-cert-sync
+        target: /var/lib/traefik-cert-sync
+      - type: bind
+        source: /etc/traefik/dynamic
+        target: /etc/traefik/dynamic
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+    networks:
+      - proxy
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager
+          - node.labels.traefik == true
+      update_config:
+        parallelism: 1
+        # One listener owns host ports on each node; start-first would conflict with the old task.
+        order: stop-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  proxy:
+    external: true
