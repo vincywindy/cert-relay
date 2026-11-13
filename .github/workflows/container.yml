@@ -64,8 +64,9 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           flavor: latest=false
+          # run_number matches this workflow's UI sequence (#1, #2); reruns keep the same number.
           tags: |
-            type=raw,value=${{ github.run_id }}
+            type=raw,value=${{ github.run_number }}
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -77,5 +78,5 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Published image name
         env:
-          IMAGE: ${{ steps.image.outputs.name }}:${{ github.run_id }}
-        run: echo "Image build ID tag = $IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          IMAGE: ${{ steps.image.outputs.name }}:${{ github.run_number }}
+        run: echo "Image workflow run number tag = $IMAGE" >> "$GITHUB_STEP_SUMMARY"

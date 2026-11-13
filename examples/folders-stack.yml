@@ -1,8 +1,8 @@
-# Before deployment: replace the image build ID and label the nodes that should run Traefik.
+# Before deployment: replace the image workflow run number (#1, #2) and label eligible nodes.
 # Each eligible node must have /mnt/acme-publish (NFS) and /var/lib/traefik-sync (LOCAL disk).
 services:
   traefik:
-    image: ${TRAEFIK_SYNC_IMAGE:-ghcr.io/vincywindy/cert-relay:12345678901}
+    image: ${TRAEFIK_SYNC_IMAGE:-ghcr.io/vincywindy/cert-relay:1}
     command:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443

@@ -149,7 +149,7 @@ docker network create --driver overlay --attachable proxy
 docker node update --label-add traefik=true YOUR_MANAGER_NODE
 
 # 使用实际 GitHub 仓库对应的镜像路径；私有 GHCR 镜像先 docker login ghcr.io。
-export TRAEFIK_SYNC_IMAGE=ghcr.io/vincywindy/cert-relay:12345678901
+export TRAEFIK_SYNC_IMAGE=ghcr.io/vincywindy/cert-relay:1
 docker stack deploy --with-registry-auth -c examples/stack.yml edge
 docker service logs -f edge_traefik
 ```
@@ -174,7 +174,7 @@ docker run --rm cert-relay:3.7.18 version
 - PR、`main`/`master` 推送、`v*` 标签及手动运行触发。
 - ShellCheck、在实际 Alpine 镜像中执行行为测试、启动真实 Traefik 验证 CLI/环境变量/静态配置文件兼容、TLS 证书热加载、信号退出和同步进程故障退出。
 - 检查通过后构建 `linux/amd64`、`linux/arm64`，非 PR 推送到 `ghcr.io/<仓库所有者>/<仓库名>`，使用自动提供的 `GITHUB_TOKEN`，不需要自建仓库密码 secret。
-- 镜像仅使用 GitHub build/run ID：`ghcr.io/vincywindy/cert-relay:${{ github.run_id }}`。不再发布 `latest`、分支或 semver 标签；同一 run 重试沿用同一个 ID。PR 只构建，不推送。
+- 镜像仅使用此 workflow 在 Actions 页面显示的运行序号（`#1`、`#2`）：`ghcr.io/vincywindy/cert-relay:${{ github.run_number }}`，例如 `:1`、`:2`。不发布 `latest`、分支或 semver 标签；同一次运行重试沿用同一个序号。PR 只构建，不推送，也会占用运行序号，所以已发布标签可能不连续。
 
 仓库需要允许 workflow 写入 Packages。新建的 GHCR 包可能是私有的，Swarm 节点需登录或自行将包改为公开。项目只提供工作流，不会自动创建 GitHub 仓库或执行发布。
 

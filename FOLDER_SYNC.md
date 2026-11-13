@@ -116,13 +116,14 @@ NFS 目标允许写入和同目录 rename；但供 Traefik 监听的目标应使
 
 推送 `main`/`master`、`v*` 标签或手动运行 `.github/workflows/container.yml`，先测试，再构建并推送 GHCR 镜像；PR 只测试/构建，不推送。支持 `linux/amd64` 和 `linux/arm64`。
 
-**唯一镜像标签采用 `${{ github.run_id }}`（GitHub build/run ID）**：
+**唯一镜像标签采用 `${{ github.run_number }}`（此 workflow 在 Actions 页面上的 `#1`、`#2` 运行序号）**：
 
 ```text
-ghcr.io/<owner>/<repository>:<github.run_id>
+ghcr.io/vincywindy/cert-relay:1
+ghcr.io/vincywindy/cert-relay:2
 ```
 
-不额外发布 `latest` 或分支标签。同一 run 重试会覆盖同一个标签。使用仓库自带 `GITHUB_TOKEN` 和 `packages: write`。底包版本由 Dockerfile 的 `TRAEFIK_IMAGE` 默认值控制，本地构建也可覆盖此 build arg。工作流成功后在 Summary 查看完整镜像名，并更新 stack 中的构建 ID。
+不额外发布 `latest` 或分支标签。同一次运行重试会覆盖同一个序号标签。PR 只构建、不推送，但也占用序号，因此已发布标签可能不连续。使用仓库自带 `GITHUB_TOKEN` 和 `packages: write`。底包版本由 Dockerfile 的 `TRAEFIK_IMAGE` 默认值控制，本地构建也可覆盖此 build arg。工作流成功后在 Summary 查看完整镜像名，并更新 stack 中的运行序号。
 
 ## 测试
 
